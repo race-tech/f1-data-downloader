@@ -12,13 +12,6 @@ on:
         required: false
         type: boolean
         default: false
-    outputs:
-      artifact-id:
-        description: "The artifact id of the workflow output"
-        value: ${{ jobs.run-workflow.outputs.artifact-id }}
-      artifact-url:
-        description: "The artifact url of the workflow output"
-        value: ${{ jobs.run-workflow.outputs.artifact-url }}
 
 jobs:
   run-workflow:

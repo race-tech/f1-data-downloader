@@ -21,9 +21,8 @@ on:
         value: ${{ jobs.run-script.steps.upload-artifacts.outputs.artifact-url }}
 
 jobs:
-  run_script:
+  run-script:
     runs-on: ubuntu-latest
-    id: run-script
 
     steps:
       - name: Checkout code

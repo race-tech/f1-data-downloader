@@ -22,16 +22,26 @@ from f1_data_downloader.parser.parse_sprint_classification import parse_sprint_f
 from f1_data_downloader.parser.parse_sprint_lap_chart import parse_sprint_lap_chart
 
 base = "https://www.fia.com"
-endpoint = "/events/fia-formula-one-world-championship"
+events_endpoint = "/events/fia-formula-one-world-championship"
+decision_documents_endpoint = "/system/files/decision-document"
 
-titles = {
+decision_documents_files = [
+    {
+        "pdf_filename": "race_classification",
+        "fia_filename": "final_race_classification"
+    },
+    {
+        "pdf_filename": "quali_classification",
+        "fia_filename": "final_qualifying_classification"
+    },
+    {
+        "pdf_filename": "starting_grid",
+        "fia_filename": "final_starting_grid",
+    }
+]
+
+events_titles = {
     "RACE": {
-        "race_classification": [
-            "Race Provisional Classification",
-            "Provisional Classification",
-            "Classification",
-            "Provisional Race Classification"
-        ],
         "race_lap_chart": [
             "Race Lap Chart",
             "Lap Chart"
@@ -52,9 +62,6 @@ titles = {
             "History Chart"
         ]
     },
-    "QUALIFYING": {
-        "quali_classification": ["Provisional Classification", "Classification"]
-    },
     "SPRINT RACE": {
         "sprint_classification": ["Provisional Classification", "Sprint Provisional Classification", "Classification"],
         "sprint_lap_chart": ["Sprint Lap Chart", "Lap Chart"],
@@ -63,19 +70,6 @@ titles = {
             "Sprint History Chart"
         ]
     }
-}
-
-entrant_mapping = {
-    "Oracle Red Bull Racing": "Red Bull",
-    "McLaren Formula 1 Team": "McLaren",
-    "Mercedes-AMG PETRONAS F1 Team": "Mercedes",
-    "Aston Martin Aramco F1 Team": "Aston Martin",
-    "Scuderia Ferrari HP": "Ferrari",
-    "Atlassian Williams Racing": "Williams",
-    "BWT Alpine F1 Team": "Alpine F1 Team",
-    "MoneyGram Haas F1 Team": "Haas F1 Team",
-    "Visa Cash App Racing Bulls F1 Team": "RB F1 Team",
-    "Stake F1 Team Kick Sauber": "Sauber",
 }
 
 entrant_id_mapping = {
@@ -139,11 +133,11 @@ driver_no_mapping = {
     43: 861,
 }
 
-def download_files(year: int, race_name: str, is_sprint: bool):
+def download_files(year: int, kebab_race_name: str, snake_race_name: str, is_sprint: bool):
     # Format the key to the following format:
     # year_round_country
     # Note: the round is a 2 digit number
-    complete_url = base + endpoint + f"/season-{year}/{race_name}/eventtiming-information"
+    complete_url = base + events_endpoint + f"/season-{year}/{kebab_race_name}/eventtiming-information"
     print("Event timing url:", complete_url)
     page = urlopen(complete_url)
     html = page.read().decode("utf-8")
@@ -164,7 +158,6 @@ def download_files(year: int, race_name: str, is_sprint: bool):
 
     files_url = {
         "RACE": [],
-        "QUALIFYING": [],
         "SPRINT RACE": [],
     }
     current_header = ""
@@ -220,12 +213,29 @@ def download_files(year: int, race_name: str, is_sprint: bool):
 
     print("----- Files found -----")
 
+    decision_document_complete_url = base + decision_documents_endpoint + f"/{year}_{snake_race_name}_-_"
+    for file in decision_documents_files:
+        dl_url = decision_document_complete_url + file.get("fia_filename", "") + ".pdf"
+        filename = file.get("pdf_filename", "")
+
+        print(f"Downloading: {dl_url} to {filename}.pdf")
+
+        resp = requests.get(dl_url)
+
+        if resp.status_code != 200:
+            print(f"Error could not download: {dl_url} - {resp.status_code}")
+            exit(1)
+
+        filepath = Path(f"data/{filename}.pdf")
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        filepath.write_bytes(resp.content)        
+
     for header in files_url:
         for files in files_url[header]:
             fn = None
 
-            for f in titles[header]:
-                if files[0] in titles[header][f]:
+            for f in events_titles[header]:
+                if files[0] in events_titles[header][f]:
                     fn = f
                     break
 
@@ -249,22 +259,22 @@ def download_files(year: int, race_name: str, is_sprint: bool):
 
 def create_constructor_results():
     data = parse_race_final_classification("data/race_classification.pdf")
-    data['entrant'] = data['entrant'].map(lambda x: entrant_mapping.get(x))
-    data = data[['entrant', 'points']]
+    data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x))
+    data = data[['constructor_id', 'points']]
     data['points'] = data['points'].astype('Int64')
-    result = data.groupby("entrant", as_index=False)["points"].sum()
-    result.to_csv("csv/constructor_results.csv")
+    result = data.groupby("constructor_id", as_index=False)["points"].sum()
+    result.to_csv("csv/constructor_results.csv", index=False)
 
     print("----- CSV file created for constructor results -----")
 
 def create_constructor_standings():
     data = parse_constructor_championship("data/constructors_championship.pdf")
     data['position'] = data['pos']
-    data['positionText'] = data['pos']
+    data['position_text'] = data['pos']
     data['points'] = data['total']
-    data['entrant'] = data['entrant'].map(lambda x: entrant_mapping.get(x))
+    data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x))
 
-    data = data[['entrant', 'points', 'position', 'positionText', 'wins']]
+    data = data[['constructor_id', 'points', 'position', 'position_text', 'wins']]
 
     data.to_csv("csv/constructor_standings.csv", index=False)
 
@@ -323,7 +333,7 @@ def create_results():
         'fastest_lap_speed',
     ]]
 
-    data.to_csv("csv/results.csv")
+    data.to_csv("csv/results.csv", index=False)
 
     print("----- CSV file created for results -----")
 
@@ -443,7 +453,7 @@ def create_sprint_results():
         'fastest_lap_time',
     ]]
 
-    data.to_csv("csv/sprint_results.csv")
+    data.to_csv("csv/sprint_results.csv", index=False)
 
     print("----- CSV file created for sprint results -----")
 
@@ -484,8 +494,7 @@ if __name__ == "__main__":
     countries = json.load(file)
 
     try :
-        key = snake_race_name
-        download_files(int(season), kebab_race_name, is_sprint)
+        download_files(int(season), kebab_race_name, snake_race_name, is_sprint)
 
         # Ensures csv folder exists
         filepath = Path(f"csv")

@@ -2,12 +2,14 @@ from re import sub
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 from bs4.element import Tag
-
 import requests
+import pandas as pd
+
 from pathlib import Path
+import logging
 import json
 import sys
-import pandas as pd
+import traceback
 
 from f1_data_downloader.parser.parse_quali import parse_quali_final_classification
 from f1_data_downloader.parser.parse_driver_championship import parse_driver_championship
@@ -16,6 +18,7 @@ from f1_data_downloader.parser.parse_race_classification import parse_race_final
 from f1_data_downloader.parser.parse_race_history_chart import parse_race_history_chart
 from f1_data_downloader.parser.parse_race_lap_chart import parse_race_lap_chart
 from f1_data_downloader.parser.parse_race_pit_stops import parse_race_pit_stop
+from f1_data_downloader.parser.parse_starting_grid import parse_starting_grid
 
 from f1_data_downloader.parser.parse_sprint_history_chart import parse_sprint_history_chart
 from f1_data_downloader.parser.parse_sprint_classification import parse_sprint_final_classification
@@ -133,12 +136,14 @@ driver_no_mapping = {
     43: 861,
 }
 
+logger = logging.getLogger(__name__)
+
 def download_files(year: int, kebab_race_name: str, snake_race_name: str, is_sprint: bool):
     # Format the key to the following format:
     # year_round_country
     # Note: the round is a 2 digit number
     complete_url = base + events_endpoint + f"/season-{year}/{kebab_race_name}/eventtiming-information"
-    print("Event timing url:", complete_url)
+    logger.info("Event timing url: %s", complete_url)
     page = urlopen(complete_url)
     html = page.read().decode("utf-8")
     soup = BeautifulSoup(html, "html.parser")
@@ -147,13 +152,13 @@ def download_files(year: int, kebab_race_name: str, snake_race_name: str, is_spr
     content = soup.find("div", class_="content")
 
     if not isinstance(content, Tag):
-        print("Error: content not found")
+        logger.error("content not found")
         exit(1)
 
     middle = content.find("div", class_="middle")
 
     if not isinstance(middle, Tag):
-        print("Error: middle not found")
+        logger.error("middle not found")
         exit(1)
 
     files_url = {
@@ -196,34 +201,34 @@ def download_files(year: int, kebab_race_name: str, snake_race_name: str, is_spr
         a = div.find("a")
 
         if not isinstance(a, Tag):
-            print("Error: a tag not found")
+            logger.error("a tag not found")
             exit(1)
 
         title_div = div.find("div", class_="title")
 
         if not isinstance(title_div, Tag):
-            print("Error: title_div not found")
+            logger.error("title_div not found")
             exit(1)
 
         url = a.get("href")
         title = title_div.text
 
-        print(f"Found: {current_header} - {title}")
+        logger.info(f"Found: {current_header} - {title}")
         files_url[current_header].append((title, url))
 
-    print("----- Files found -----")
+    logger.info("----- Files found -----")
 
     decision_document_complete_url = base + decision_documents_endpoint + f"/{year}_{snake_race_name}_-_"
     for file in decision_documents_files:
         dl_url = decision_document_complete_url + file.get("fia_filename", "") + ".pdf"
         filename = file.get("pdf_filename", "")
 
-        print(f"Downloading: {dl_url} to {filename}.pdf")
+        logger.info(f"Downloading: {dl_url} to {filename}.pdf")
 
         resp = requests.get(dl_url)
 
         if resp.status_code != 200:
-            print(f"Error could not download: {dl_url} - {resp.status_code}")
+            logger.error(f"could not download: {dl_url} - {resp.status_code}")
             exit(1)
 
         filepath = Path(f"data/{filename}.pdf")
@@ -240,17 +245,17 @@ def download_files(year: int, kebab_race_name: str, snake_race_name: str, is_spr
                     break
 
             if fn is None:
-                print(f"Skipping: {files[0]}")
+                logger.info(f"Skipping: {files[0]}")
                 continue
 
             dl_url = files[1]
 
-            print(f"Downloading: {dl_url} to {fn}.pdf")
+            logger.info(f"Downloading: {dl_url} to {fn}.pdf")
 
             resp = requests.get(dl_url)
 
             if resp.status_code != 200:
-                print(f"Error could not download: {dl_url} - {resp.status_code}")
+                logger.error(f"could not download: {dl_url} - {resp.status_code}")
                 exit(1)
 
             filepath = Path(f"data/{fn}.pdf")
@@ -265,7 +270,7 @@ def create_constructor_results():
     result = data.groupby("constructor_id", as_index=False)["points"].sum()
     result.to_csv("csv/constructor_results.csv", index=False)
 
-    print("----- CSV file created for constructor results -----")
+    logger.info("----- CSV file created for constructor results -----")
 
 def create_constructor_standings():
     data = parse_constructor_championship("data/constructors_championship.pdf")
@@ -278,7 +283,7 @@ def create_constructor_standings():
 
     data.to_csv("csv/constructor_standings.csv", index=False)
 
-    print("----- CSV file created for constructor standings -----")
+    logger.info("----- CSV file created for constructor standings -----")
 
 def to_ms_safe(t: str):
     if pd.isna(t) or t == "" or t is None:
@@ -296,9 +301,11 @@ def to_ms_safe(t: str):
 
 def create_results():
     data = parse_race_final_classification("data/race_classification.pdf")
+    grid_data = parse_starting_grid("data/starting_grid.pdf")
     
     data = data.reset_index(drop=True)
     data['driver_id'] = data['driver_no'].map(lambda x: driver_no_mapping.get(int(x)))
+    data['driver_no'] = data['driver_no'].astype(int)
     data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x))
     data['position'] = data.index + 1
 
@@ -333,9 +340,14 @@ def create_results():
         'fastest_lap_speed',
     ]]
 
+    grid_data = grid_data.reset_index().rename(columns={"index": "grid"})
+    grid_data['grid'] = grid_data['grid'] + 1
+
+    data = data.merge(grid_data[['car', 'grid']], left_on='driver_no', right_on='car', how='left').drop(columns=['car'])
+
     data.to_csv("csv/results.csv", index=False)
 
-    print("----- CSV file created for results -----")
+    logger.info("----- CSV file created for results -----")
 
 def create_driver_standings():
     data = parse_driver_championship("data/drivers_championship.pdf")
@@ -355,7 +367,7 @@ def create_driver_standings():
     ]]
 
     data.to_csv("csv/driver_standings.csv", index=False)
-    print("----- CSV file created for driver standings -----")
+    logger.info("----- CSV file created for driver standings -----")
 
 
 def create_lap_times(is_sprint: bool):
@@ -374,7 +386,7 @@ def create_lap_times(is_sprint: bool):
     ]]
 
     data.to_csv("csv/lap_times.csv", index=False)
-    print("----- CSV file created for lap times -----")
+    logger.info("----- CSV file created for lap times -----")
 
 def create_pit_stops():
     data = parse_race_pit_stop("data/race_pit_stops.pdf")
@@ -395,7 +407,7 @@ def create_pit_stops():
     ]]
 
     data.to_csv("csv/pit_stops.csv", index=False)
-    print("----- CSV file created for pit stops -----")
+    logger.info("----- CSV file created for pit stops -----")
 
 def create_qualifying():
     data = parse_quali_final_classification("data/quali_classification.pdf")
@@ -417,7 +429,7 @@ def create_qualifying():
     ]]
 
     data.to_csv("csv/qualifying.csv", index=False)
-    print("----- CSV file created for qualifying -----")
+    logger.info("----- CSV file created for qualifying -----")
 
 def create_sprint_results():
     data = parse_sprint_final_classification("data/sprint_classification.pdf")
@@ -455,14 +467,14 @@ def create_sprint_results():
 
     data.to_csv("csv/sprint_results.csv", index=False)
 
-    print("----- CSV file created for sprint results -----")
+    logger.info("----- CSV file created for sprint results -----")
 
 
 def create_sprint_classification():
     data = parse_sprint_final_classification("data/sprint_classification.pdf")
     data.to_csv("csv/sprint_classification.csv", index=False)
 
-    print("----- CSV file created for sprint classification -----")
+    logger.info("----- CSV file created for sprint classification -----")
     return
 
 def snake_case(s: str) -> str:
@@ -479,6 +491,8 @@ def kebab_case(s: str) -> str:
 
 
 if __name__ == "__main__":
+    # Configure logger
+    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
     # Get season, race_name and is_sprint from stdin
     season = sys.argv[1]
     race_name = sys.argv[2]
@@ -496,6 +510,8 @@ if __name__ == "__main__":
     try :
         download_files(int(season), kebab_race_name, snake_race_name, is_sprint)
 
+        logger.info("----- Parsing file -----")
+
         # Ensures csv folder exists
         filepath = Path(f"csv")
         filepath.mkdir(parents=True, exist_ok=True)
@@ -509,9 +525,10 @@ if __name__ == "__main__":
         create_qualifying()
 
         if is_sprint:
-            print("----- Handling sprint weekend -----")
+            logger.info("----- Handling sprint weekend -----")
             create_sprint_results()
             
     except Exception as e:
-        print(e)
+        logger.error(e)
+        logger.error(traceback.format_exc()) 
         exit(1)

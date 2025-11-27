@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 import pymupdf as fitz
 import pandas as pd
+import logging
 
+from f1_data_downloader.parser.utils import get_image_header
+
+logger = logging.getLogger(__name__)
 
 def parse_race_final_classification(file: str) -> pd.DataFrame:
     """Parse "Race Final Classification" PDF
@@ -13,14 +17,28 @@ def parse_race_final_classification(file: str) -> pd.DataFrame:
     """
     # Find the page with "Race Final Classification"
     doc = fitz.open(file)
+    found = []
     for i in range(len(doc)):
         page = doc[i]
-        found = page.search_for('Race Final Classification')
-        if len(found) > 0:
+        if '.pdf' in page.get_text():  # Fix #59
+            continue
+        found = page.search_for('Final Classification')
+        if found:
             break
-        elif len(page.search_for('Race Provisional Classification')) > 0:
-            found = page.search_for('Race Provisional Classification')
+        found = page.search_for('Provisional Classification')
+        if found:
+            logger.warning('Found and using provisional classification, not the final one')
             break
+        else:
+            found = get_image_header(page)
+            if found:
+                found = [found]
+                break
+        if not found:
+            doc.close()
+            raise ValueError(f'"Final Classification" or "Provisional Classification" not found '
+                             f'on any page in {file}')
+        
 
     # Width and height of the page
     w, _ = page.bound()[2], page.bound()[3]

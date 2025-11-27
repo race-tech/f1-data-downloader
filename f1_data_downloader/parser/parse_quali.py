@@ -94,7 +94,6 @@ def format_long_name_row(row):
     if row["driver"] is not None:
         return row
     elif row["_"]:
-        print(row)
         # In this case the driver name is too long so every info is stacked up in the first cell
         tokens = row["_"].split(" ")
 

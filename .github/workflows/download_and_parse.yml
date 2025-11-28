@@ -21,9 +21,9 @@ on:
       artifact-id:
         description: "The artifact id of the workflow output"
         value: ${{ jobs.run-script.steps.upload-artifacts.outputs.artifact-id }}
-      artifact-url:
-        description: "The artifact url of the workflow output"
-        value: ${{ jobs.run-script.steps.upload-artifacts.outputs.artifact-url }}
+      run-id:
+        description: The run id of this workflow.
+        value: ${{ github.run_id }}
 
 jobs:
   run-script:

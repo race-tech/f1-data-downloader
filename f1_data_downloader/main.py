@@ -531,7 +531,6 @@ if __name__ == "__main__":
 
         if is_sprint:
             logger.info("----- Handling sprint weekend -----")
-            create_sprint_results()
             
     except Exception as e:
         logger.error(e)

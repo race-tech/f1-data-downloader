@@ -414,8 +414,6 @@ def create_qualifying():
     data = parse_quali_final_classification("data/quali_classification.pdf")
     data = data.reset_index(drop=True)
 
-    print(data)
-
     data['driver_id'] = data['no'].map(lambda x: driver_no_mapping.get(int(x)))
     data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x)).astype('Int64')
     data['number'] = data['no']

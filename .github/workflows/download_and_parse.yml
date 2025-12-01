@@ -97,8 +97,7 @@ jobs:
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
-        working-directory: ./f1-data-downloader
         id: upload-artifacts
         with:
           name: csv
-          path: csv
+          path: f1-data-downloader/csv

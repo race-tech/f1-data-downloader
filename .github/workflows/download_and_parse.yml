@@ -30,6 +30,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check inputs
+        shell: bash
+        run: |
+          echo "Season: ${{ inputs.season }}"
+          echo "Grand prix: ${{ inputs.grand_prix }}"
+          echo "Is sprint: ${{ inputs.is_sprint }}"
+          
       - name: Check season input is a number
         shell: bash
         run: |
@@ -86,7 +93,7 @@ jobs:
         working-directory: ./f1-data-downloader
         run: |
           source .venv/bin/activate
-          python3 f1_data_downloader/main.py ${{ inputs.season }} '${{ inputs.grand_prix }}' ${{ inputs.is_sprint }}
+          python3 f1_data_downloader/main.py ${{ inputs.season }} "${{ inputs.grand_prix }}" ${{ inputs.is_sprint }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

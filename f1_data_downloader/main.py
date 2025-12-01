@@ -265,7 +265,7 @@ def download_files(year: int, kebab_race_name: str, snake_race_name: str, is_spr
 
 def create_constructor_results():
     data = parse_race_final_classification("data/race_classification.pdf")
-    data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x))
+    data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x)).astype(int)
     data = data[['constructor_id', 'points']]
     data['points'] = data['points'].astype('Int64')
     result = data.groupby("constructor_id", as_index=False)["points"].sum()
@@ -278,7 +278,7 @@ def create_constructor_standings():
     data['position'] = data['pos']
     data['position_text'] = data['pos']
     data['points'] = data['total']
-    data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x))
+    data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x)).astype(int)
 
     data = data[['constructor_id', 'points', 'position', 'position_text', 'wins']]
 
@@ -303,11 +303,11 @@ def to_ms_safe(t: str):
 def create_results():
     data = parse_race_final_classification("data/race_classification.pdf")
     grid_data = parse_starting_grid("data/starting_grid.pdf")
-    
+
     data = data.reset_index(drop=True)
     data['driver_id'] = data['driver_no'].map(lambda x: driver_no_mapping.get(int(x)))
-    data['driver_no'] = data['driver_no'].astype(int)
-    data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x))
+    data['driver_number'] = data['driver_no'].astype(int)
+    data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x)).astype(int)
     data['position'] = data.index + 1
 
     data['position_text'] = data['position'].astype(str)
@@ -327,7 +327,7 @@ def create_results():
     data = data[[
         'driver_id',
         'constructor_id',
-        'driver_no',
+        'driver_number',
         'position',
         'position_text',
         'position_order',
@@ -344,7 +344,7 @@ def create_results():
     grid_data = grid_data.reset_index().rename(columns={"index": "grid"})
     grid_data['grid'] = grid_data['grid'] + 1
 
-    data = data.merge(grid_data[['car', 'grid']], left_on='driver_no', right_on='car', how='left').drop(columns=['car'])
+    data = data.merge(grid_data[['car', 'grid']], left_on='driver_number', right_on='car', how='left').drop(columns=['car'])
 
     data.to_csv("csv/results.csv", index=False)
 

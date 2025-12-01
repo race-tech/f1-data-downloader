@@ -497,15 +497,20 @@ if __name__ == "__main__":
     season = sys.argv[1]
     race_name = sys.argv[2]
 
+    # Load grand prix file and change race name to FIA race name
+    try:
+        with open('grand_prix.json', 'r') as gp_file:
+            gp = json.load(gp_file)
+            race_name = gp[race_name]
+    except KeyError:
+        logger.error("unable to find key %s in grand prix list", sys.argv[2])
+        exit(1)
+
     # Transform race name to kebab case and snake case
     snake_race_name = snake_case(race_name)
     kebab_race_name = kebab_case(race_name)
 
     is_sprint = sys.argv[3] == "true"
-
-    # Load contries.json file
-    file = open("countries.json", "r")
-    countries = json.load(file)
 
     try :
         download_files(int(season), kebab_race_name, snake_race_name, is_sprint)

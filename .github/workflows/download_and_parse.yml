@@ -40,6 +40,10 @@ jobs:
       
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          repository: race-tech/f1-data-downloader
+          ref: main
+          path: f1-data-downloader
 
       - name: Set up python
         id: setup-python
@@ -74,16 +78,19 @@ jobs:
       - name: Install dependencies
         if: steps.cached-poetry-deps.outputs.cache-hit != 'true'
         shell: bash
+        working-directory: ./f1-data-downloader
         run: poetry install --no-interaction
 
       - name: Run script
         shell: bash
+        working-directory: ./f1-data-downloader
         run: |
           source .venv/bin/activate
           python3 f1_data_downloader/main.py ${{ inputs.season }} '${{ inputs.grand_prix }}' ${{ inputs.is_sprint }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
+        working-directory: ./f1-data-downloader
         id: upload-artifacts
         with:
           name: csv

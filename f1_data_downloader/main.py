@@ -86,6 +86,7 @@ entrant_id_mapping = {
     "MoneyGram Haas F1 Team": 210,
     "Visa Cash App Racing Bulls F1 Team": 215,
     "Stake F1 Team Kick Sauber": 15,
+    "Kick Sauber F1 Team": 15,
 }
 
 driver_mapping = {
@@ -413,8 +414,10 @@ def create_qualifying():
     data = parse_quali_final_classification("data/quali_classification.pdf")
     data = data.reset_index(drop=True)
 
+    print(data)
+
     data['driver_id'] = data['no'].map(lambda x: driver_no_mapping.get(int(x)))
-    data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x))
+    data['constructor_id'] = data['entrant'].map(lambda x: entrant_id_mapping.get(x)).astype('Int64')
     data['number'] = data['no']
     data['position'] = data.index + 1
 
@@ -498,13 +501,13 @@ if __name__ == "__main__":
     race_name = sys.argv[2]
 
     # Load grand prix file and change race name to FIA race name
-    try:
-        with open('grand_prix.json', 'r') as gp_file:
-            gp = json.load(gp_file)
+    with open('grand_prix.json', 'r') as gp_file:
+        gp = json.load(gp_file)
+        if race_name in gp:
             race_name = gp[race_name]
-    except KeyError:
-        logger.error("unable to find key %s in grand prix list", sys.argv[2])
-        exit(1)
+        else:
+            logger.warning("unable to find key %s in grand prix list", sys.argv[2])
+            logger.warning("trying to perform action still...")
 
     # Transform race name to kebab case and snake case
     snake_race_name = snake_case(race_name)
